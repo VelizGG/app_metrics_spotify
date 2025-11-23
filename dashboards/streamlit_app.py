@@ -30,14 +30,21 @@ st.sidebar.header("⚙️ Configuración")
 @st.cache_data
 def load_data():
     """Carga los datos curados con caché."""
+    # Intentar primero datos reales (desarrollo local)
     data_path = Path(__file__).parent.parent / 'data' / 'curated' / 'spotify_data.parquet'
+    
+    # Si no existen, usar datos demo
+    if not data_path.exists():
+        data_path = Path(__file__).parent.parent / 'data' / 'demo' / 'synthetic_spotify_data.parquet'
+        st.sidebar.info("📊 Usando datos sintéticos de demostración")
+    
     try:
         df = load_curated_data(data_path)
         return df
     except FileNotFoundError:
-        st.error("⚠️ No se encontró el archivo de datos curados.")
-        st.info("Por favor, ejecuta primero el pipeline de transformación:\n"
-                "```python src/data_pipeline.py data/raw/sample.json data/curated/spotify_data.parquet```")
+        st.error("⚠️ No se encontraron datos.")
+        st.info("Genera datos demo ejecutando:\n"
+                "```python src/generate_synthetic_data.py```")
         return None
 
 df = load_data()
