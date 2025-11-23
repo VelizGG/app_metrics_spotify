@@ -28,6 +28,21 @@ env/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+
+# Data files - PRIVACY PROTECTION
+data/raw/**
+data/curated/**
+!data/raw/.gitkeep
+!data/curated/.gitkeep
+
+# Allow synthetic/demo data (safe for public sharing)
+!data/demo/**
+
+# Features and models
+data/features/**
+!data/features/.gitkeep
+models/*.pkl
+!models/.gitkeep
 *.ipynb_checkpoints/
 
 # Data files (DO NOT commit raw data with sensitive info)

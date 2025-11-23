@@ -7,24 +7,34 @@ from typing import Optional
 SESSION_GAP = pd.Timedelta('30min')
 
 
-def sessionize(df: pd.DataFrame, user_col: str = 'username', ts_col: str = 'ts', 
+def sessionize(df: pd.DataFrame, user_col: str = None, ts_col: str = 'ts', 
                gap: pd.Timedelta = SESSION_GAP) -> pd.DataFrame:
     """
     Agrupa reproducciones en sesiones basadas en gaps temporales.
     
     Una nueva sesión comienza cuando pasan más de `gap` minutos entre
-    reproducciones consecutivas del mismo usuario.
+    reproducciones consecutivas.
     
     Args:
         df: DataFrame con los datos
-        user_col: Nombre de la columna de usuario
+        user_col: Nombre de la columna de usuario (opcional, si None se usa 'global')
         ts_col: Nombre de la columna de timestamp
         gap: Timedelta que define el gap entre sesiones (default: 30 min)
         
     Returns:
         DataFrame con columna 'session_id' agregada
     """
-    df = df.sort_values([user_col, ts_col]).copy()
+    # Si no hay columna de usuario, crear una columna 'user' con valor fijo
+    if user_col is None or user_col not in df.columns:
+        df = df.copy()
+        df['_user_temp'] = 'global'
+        user_col = '_user_temp'
+        created_temp = True
+    else:
+        df = df.copy()
+        created_temp = False
+    
+    df = df.sort_values([user_col, ts_col])
     
     # Calcular diferencia temporal entre filas consecutivas por usuario
     df['prev_ts'] = df.groupby(user_col)[ts_col].shift(1)
@@ -40,9 +50,13 @@ def sessionize(df: pd.DataFrame, user_col: str = 'username', ts_col: str = 'ts',
     df.drop(columns=['prev_ts', 'delta', 'new_session'], inplace=True)
     
     # Crear session_id global único
-    df['session_id'] = df[user_col].astype(str) + '::' + df['session_id'].astype(str)
-    
-    print(f"✓ Creadas {df['session_id'].nunique():,} sesiones para {df[user_col].nunique():,} usuarios")
+    if created_temp:
+        df['session_id'] = 'session_' + df['session_id'].astype(str)
+        df.drop(columns=['_user_temp'], inplace=True)
+        print(f"✓ Creadas {df['session_id'].nunique():,} sesiones")
+    else:
+        df['session_id'] = df[user_col].astype(str) + '::' + df['session_id'].astype(str)
+        print(f"✓ Creadas {df['session_id'].nunique():,} sesiones para {df[user_col].nunique():,} usuarios")
     
     return df
 
@@ -218,21 +232,28 @@ def rolling_user_features(df: pd.DataFrame, user_col: str = 'username',
     return daily
 
 
-def track_features(df: pd.DataFrame, track_col: str = 'spotify_track_uri') -> pd.DataFrame:
+def track_features(df: pd.DataFrame, track_col: str = 'spotify_track_uri', 
+                   artist_col: str = 'master_metadata_album_artist_name') -> pd.DataFrame:
     """
     Calcula features agregadas por track.
     
     Args:
         df: DataFrame con los datos
         track_col: Nombre de la columna de track
+        artist_col: Nombre de la columna de artista (para contar artistas únicos si no hay username)
         
     Returns:
         DataFrame con features por track
     """
     agg_dict = {
         'ms_played': ['sum', 'mean', 'count'],
-        'username': 'nunique',
     }
+    
+    # Usar username si existe, sino contar por IP o simplemente no incluir unique_listeners
+    if 'username' in df.columns:
+        agg_dict['username'] = 'nunique'
+    elif 'ip_addr' in df.columns:
+        agg_dict['ip_addr'] = 'nunique'
     
     if 'skipped' in df.columns:
         agg_dict['skipped'] = 'mean'
@@ -242,18 +263,28 @@ def track_features(df: pd.DataFrame, track_col: str = 'spotify_track_uri') -> pd
     # Renombrar columnas
     tracks.columns = ['_'.join(col).strip('_') if col[1] else col[0] 
                       for col in tracks.columns.values]
-    tracks.rename(columns={
+    
+    rename_dict = {
         'ms_played_sum': 'total_ms_played',
         'ms_played_mean': 'avg_ms_played',
         'ms_played_count': 'total_plays',
-        'username_nunique': 'unique_listeners',
         'skipped_mean': 'skip_rate'
-    }, inplace=True)
+    }
+    
+    if 'username_nunique' in tracks.columns:
+        rename_dict['username_nunique'] = 'unique_listeners'
+    elif 'ip_addr_nunique' in tracks.columns:
+        rename_dict['ip_addr_nunique'] = 'unique_listeners'
+    else:
+        # Si no hay columna de listeners únicos, usar 1 por defecto
+        tracks['unique_listeners'] = 1
+    
+    tracks.rename(columns=rename_dict, inplace=True)
     
     # Calcular popularidad relativa
     tracks['popularity_score'] = (
-        tracks['total_plays'] * 0.5 + 
-        tracks['unique_listeners'] * 0.5
+        tracks['total_plays'] * 0.7 + 
+        tracks['unique_listeners'] * 0.3
     )
     
     # Normalizar popularidad (0-100)

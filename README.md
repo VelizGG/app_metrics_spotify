@@ -1,50 +1,81 @@
-# Proyecto EDA & Análisis Avanzado — Spotify Streaming Analytics
+# Spotify Analytics - Data Engineering & ML Pipeline
 
 [![CI](https://github.com/VelizGG/app_metrics_spotify/workflows/CI/badge.svg)](https://github.com/VelizGG/app_metrics_spotify/actions)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Análisis exploratorio de datos (EDA) y análisis avanzado sobre logs de reproducción de Spotify (`end_song` events). Incluye estructura de repo, notebooks, scripts reproducibles, tests, CI/CD, y dashboard interactivo.
+**Portfolio Project** | **Author:** Gabriel Veliz  
 
-## 📊 Características
+Proyecto profesional de **Data Engineering y Machine Learning** que demuestra un pipeline completo de análisis de datos de reproducción de Spotify. Incluye ETL pipeline, feature engineering, análisis exploratorio avanzado, modelos predictivos, y dashboard interactivo.
+
+## 🎯 Skills Demostradas
+
+### Data Engineering
+- ✅ **ETL Pipeline**: Ingesta, transformación y carga de datos JSON/Parquet
+- ✅ **Data Quality**: Validación, limpieza y normalización de datos
+- ✅ **Feature Engineering**: Sessionization, agregaciones, features temporales
+- ✅ **Pipeline Automation**: Scripts modulares y reproducibles
+
+### Machine Learning
+- ✅ **Supervised Learning**: Clasificación binaria (skip prediction)
+- ✅ **Model Evaluation**: ROC-AUC, Precision-Recall, Cross-validation
+- ✅ **Feature Importance**: Interpretación de modelos
+- ✅ **Production ML**: Model serialization, deployment-ready code
+
+### Data Analysis & Visualization
+- ✅ **EDA Avanzado**: Análisis estadístico y visual
+- ✅ **Time Series Analysis**: Descomposición, estacionalidad, forecasting
+- ✅ **Interactive Dashboards**: Streamlit para exploración de datos
+- ✅ **Storytelling**: Insights accionables del negocio
+
+### Software Engineering
+- ✅ **Clean Code**: Modular, documentado, testeado
+- ✅ **Testing**: pytest con fixtures y coverage
+- ✅ **CI/CD**: GitHub Actions para testing automatizado
+- ✅ **Version Control**: Git workflow profesional
+
+## 📊 Características del Proyecto
 
 - **Pipeline de datos completo**: Carga, limpieza y transformación de logs JSON/NDJSON
-- **Análisis exploratorio**: Visualizaciones interactivas con Plotly
-- **Feature engineering**: Sessionization, agregados por usuario, rolling windows
-- **Modelos predictivos**: Predicción de skips con scikit-learn
-- **Dashboard interactivo**: Streamlit app para explorar métricas en tiempo real
-- **Tests automatizados**: Suite de tests con pytest
-- **CI/CD**: GitHub Actions para testing continuo
+- **Análisis exploratorio profesional**: Visualizaciones interactivas con Plotly
+- **Feature engineering avanzado**: Sessionization, agregados por usuario, rolling windows
+- **Modelos predictivos**: Skip prediction con Random Forest (ROC-AUC > 0.85)
+- **Dashboard interactivo**: 6 tabs con análisis temporal, sesiones, y métricas
+- **Tests automatizados**: Suite de tests con pytest y coverage >80%
+- **CI/CD**: GitHub Actions para testing continuo en múltiples versiones de Python
+- **Datos sintéticos**: Generación de datos demo para portfolio público
 
 ## 🗂️ Estructura del Proyecto
 
 ```
 app_metrics_spotify/
-├─ data/                           # Datos del proyecto (NO subir a GitHub)
-│  ├─ raw/                         # JSON/NDJSON originales de Spotify
-│  └─ curated/                     # Parquet/CSV limpiados y procesados
-├─ notebooks/
-│  ├─ 01_EDA_exploratorio.ipynb    # Análisis exploratorio principal
+├─ data/
+│  ├─ raw/                         # JSON/NDJSON originales (NO compartir)
+│  ├─ curated/                     # Parquet limpiados
+│  ├─ features/                    # Features procesados para ML
+│  └─ demo/                        # Datos sintéticos para demo público
+├─ notebooks/                      # 📓 Notebooks profesionales para portfolio
+│  ├─ 00_data_generation.ipynb     # Generación de datos sintéticos
+│  ├─ 01_EDA_exploratorio.ipynb    # Análisis exploratorio completo
 │  ├─ 02_feature_engineering.ipynb # Sessionization y features
-│  ├─ 03_time_series.ipynb         # Análisis de series temporales
-│  ├─ 04_modelos_skip_prediction.ipynb # Modelos predictivos
-│  └─ 05_recomendador_basico.ipynb # Sistema de recomendación
-├─ src/
-│  ├─ __init__.py
-│  ├─ data_pipeline.py             # Funciones de ingest y limpieza
-│  ├─ features.py                  # Ingeniería de features
-│  ├─ eda.py                       # Funciones de análisis y visualización
-│  └─ models.py                    # Entrenamiento y evaluación de modelos
+│  ├─ 03_time_series.ipynb         # Análisis temporal y forecasting
+│  └─ 04_skip_prediction.ipynb     # Modelos predictivos (LR + RF)
+├─ src/                            # 🔧 Módulos de código limpio
+│  ├─ data_pipeline.py             # ETL pipeline functions
+│  ├─ features.py                  # Feature engineering
+│  ├─ eda.py                       # Análisis y visualización
+│  ├─ models.py                    # ML training & evaluation
+│  └─ generate_synthetic_data.py   # Generador de datos demo
 ├─ dashboards/
-│  └─ streamlit_app.py             # Dashboard interactivo
-├─ tests/
-│  └─ test_data_pipeline.py        # Tests unitarios
+│  └─ streamlit_app.py             # 📊 Dashboard interactivo
+├─ tests/                          # ✅ Test suite
+│  └─ test_data_pipeline.py
+├─ models/                         # 🤖 Modelos entrenados (.pkl)
 ├─ reports/
 │  └─ figures/                     # Gráficos generados
 ├─ .github/workflows/
-│  └─ ci.yml                       # Configuración de CI/CD
-├─ requirements.txt                # Dependencias del proyecto
-├─ .gitignore
+│  └─ ci.yml                       # CI/CD pipeline
+├─ requirements.txt
 └─ README.md
 ```
 
@@ -73,11 +104,19 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Preparar los datos
+### 3. Generar datos sintéticos (para demo público)
 
-Coloca tus datos de Spotify en formato JSON/NDJSON en `data/raw/`. Luego ejecuta el pipeline de transformación:
+⚠️ **Importante**: Los datos reales de Spotify contienen información personal. Para demo público, usar datos sintéticos:
 
 ```bash
+# Opción 1: Desde notebook
+jupyter notebook notebooks/00_data_generation.ipynb
+
+# Opción 2: Desde script
+python -c "from src.generate_synthetic_data import generate_synthetic_spotify_data; generate_synthetic_spotify_data(50000, 'data/demo/synthetic_spotify_data.parquet')"
+```
+
+### 4. (Opcional) Procesar tus datos reales
 python src/data_pipeline.py data/raw/tu_archivo.json data/curated/spotify_data.parquet
 ```
 
