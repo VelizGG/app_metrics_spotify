@@ -18,6 +18,8 @@ Proyecto profesional de **Data Engineering y Machine Learning** que demuestra un
 
 ### Machine Learning
 - ✅ **Supervised Learning**: Clasificación binaria (skip prediction)
+- ✅ **Recommendation Systems**: Content-based filtering, collaborative filtering
+- ✅ **Clustering**: K-Means para agrupación automática de tracks
 - ✅ **Model Evaluation**: ROC-AUC, Precision-Recall, Cross-validation
 - ✅ **Feature Importance**: Interpretación de modelos
 - ✅ **Production ML**: Model serialization, deployment-ready code
@@ -40,7 +42,9 @@ Proyecto profesional de **Data Engineering y Machine Learning** que demuestra un
 - **Análisis exploratorio profesional**: Visualizaciones interactivas con Plotly
 - **Feature engineering avanzado**: Sessionization, agregados por usuario, rolling windows
 - **Modelos predictivos**: Skip prediction con Random Forest (ROC-AUC > 0.85)
-- **Dashboard interactivo**: 6 tabs con análisis temporal, sesiones, y métricas
+- **Sistema de recomendación**: Content-based filtering con similitud coseno y embeddings
+- **Generación automática de playlists**: Clustering inteligente por temporal patterns, mood y comportamiento
+- **Dashboard interactivo**: 8 tabs incluyendo recomendaciones y smart playlists
 - **Tests automatizados**: Suite de tests con pytest y coverage >80%
 - **CI/CD**: GitHub Actions para testing continuo en múltiples versiones de Python
 - **Datos sintéticos**: Generación de datos demo para portfolio público
@@ -59,12 +63,15 @@ app_metrics_spotify/
 │  ├─ 01_EDA_exploratorio.ipynb    # Análisis exploratorio completo
 │  ├─ 02_feature_engineering.ipynb # Sessionization y features
 │  ├─ 03_time_series.ipynb         # Análisis temporal y forecasting
-│  └─ 04_skip_prediction.ipynb     # Modelos predictivos (LR + RF)
+│  ├─ 04_skip_prediction.ipynb     # Modelos predictivos (LR + RF)
+│  └─ 05_recommendations_playlists.ipynb # Sistema de recomendación y playlists
 ├─ src/                            # 🔧 Módulos de código limpio
 │  ├─ data_pipeline.py             # ETL pipeline functions
 │  ├─ features.py                  # Feature engineering
 │  ├─ eda.py                       # Análisis y visualización
 │  ├─ models.py                    # ML training & evaluation
+│  ├─ recommendations.py           # Sistema de recomendación
+│  ├─ playlist_generator.py        # Generación automática de playlists
 │  └─ generate_synthetic_data.py   # Generador de datos demo
 ├─ dashboards/
 │  └─ streamlit_app.py             # 📊 Dashboard interactivo
@@ -206,30 +213,42 @@ pytest tests/ -v --cov=src --cov-report=html
 
 ## 📊 Notebooks Disponibles
 
-1. **01_EDA_exploratorio.ipynb**: Análisis exploratorio completo
+1. **00_data_generation.ipynb**: Generación de datos sintéticos
+   - Creación de datasets demo
+   - Preservación de características estadísticas
+   - Datos anónimos para portfolio público
+
+2. **01_EDA_exploratorio.ipynb**: Análisis exploratorio completo
    - Carga y validación de datos
    - Estadísticas descriptivas
    - Patrones temporales
    - Top tracks y artistas
    - Análisis de skips
 
-2. **02_feature_engineering.ipynb**: Ingeniería de features (próximamente)
-   - Sessionization
+3. **02_feature_engineering.ipynb**: Ingeniería de features
+   - Sessionization (agrupación en sesiones de escucha)
    - Agregados por usuario y sesión
-   - Rolling windows
+   - Rolling windows temporales
+   - Features de tracks y artistas
 
-3. **03_time_series.ipynb**: Análisis temporal avanzado (próximamente)
+4. **03_time_series.ipynb**: Análisis temporal avanzado
    - Tendencias y estacionalidad
-   - Detección de anomalías
+   - Descomposición de series temporales
+   - Patrones de uso diario/semanal
 
-4. **04_modelos_skip_prediction.ipynb**: Modelos predictivos (próximamente)
-   - Predicción de skips
-   - Feature importance
-   - Evaluación de modelos
+5. **04_skip_prediction.ipynb**: Modelos predictivos
+   - Predicción de skips (Logistic Regression + Random Forest)
+   - Feature importance analysis
+   - Evaluación completa de modelos (ROC-AUC, Precision-Recall)
+   - Model export para producción
 
-5. **05_recomendador_basico.ipynb**: Sistema de recomendación (próximamente)
-   - Content-based filtering
-   - Collaborative filtering
+6. **05_recommendations_playlists.ipynb**: Sistema de recomendación y playlists ✨ NUEVO
+   - Content-based recommendation engine
+   - Track similarity con cosine similarity
+   - Generación automática de playlists temáticas
+   - Smart playlists por contexto temporal, mood y comportamiento
+   - Clustering de tracks similares
+   - Evaluación de calidad de recomendaciones
 
 ## 🔒 Privacidad y Buenas Prácticas
 

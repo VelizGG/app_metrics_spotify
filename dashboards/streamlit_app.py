@@ -10,6 +10,9 @@ sys.path.append(str(Path(__file__).parent.parent / 'src'))
 from data_pipeline import load_curated_data
 from eda import *
 from features import sessionize, session_features, track_features, rolling_user_features
+from recommendations import create_recommender_from_data
+from playlist_generator import create_playlist_generator
+from models import analyze_playlist_diversity
 
 # Configuración de la página
 st.set_page_config(
@@ -95,12 +98,14 @@ if df is not None:
     st.markdown("---")
     
     # Tabs para diferentes análisis
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "📊 Temporal", 
         "🎵 Top Charts", 
         "🌍 Análisis General",
         "🎯 Sesiones",
         "🔍 Análisis Avanzado",
+        "✨ Recomendaciones",
+        "🎧 Smart Playlists",
         "📥 Exportar Datos"
     ])
     
@@ -358,6 +363,381 @@ if df is not None:
             st.plotly_chart(fig_monthly, width='stretch')
     
     with tab6:
+        st.subheader("✨ Recomendaciones Personalizadas")
+        
+        st.markdown("""
+        Este sistema de recomendación analiza tus patrones de escucha para sugerirte 
+        nuevos tracks basados en:
+        - 🎵 Similitud con tus tracks favoritos
+        - ⏰ Contexto temporal (hora del día, día de semana)
+        - 🎯 Probabilidad de que completes la canción (skip resistance)
+        - 📊 Popularidad y tendencias
+        """)
+        
+        # Inicializar recomendador (con caché)
+        @st.cache_resource
+        def get_recommender(df):
+            return create_recommender_from_data(df)
+        
+        with st.spinner("🔮 Inicializando sistema de recomendación..."):
+            try:
+                recommender = get_recommender(df_filtered)
+                
+                # Mostrar perfil de usuario
+                with st.expander("👤 Tu Perfil de Escucha"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if 'skip_tolerance' in recommender.user_profile:
+                            st.metric("Skip Tolerance", recommender.user_profile['skip_tolerance'])
+                        if 'peak_hours' in recommender.user_profile:
+                            st.write(f"**Horas Pico:** {recommender.user_profile['peak_hours']}")
+                    
+                    with col2:
+                        if 'avg_skip_rate' in recommender.user_profile:
+                            st.metric("Skip Rate Promedio", f"{recommender.user_profile['avg_skip_rate']:.1%}")
+                        if 'favorite_artists' in recommender.user_profile:
+                            st.write(f"**Top Artistas:** {len(recommender.user_profile['favorite_artists'])} favoritos")
+                
+                st.markdown("---")
+                
+                # Selector de estrategia
+                st.subheader("🎯 Selecciona el Tipo de Recomendación")
+                
+                strategy = st.radio(
+                    "Estrategia:",
+                    ['hybrid', 'similar', 'context', 'skip_resistant'],
+                    format_func=lambda x: {
+                        'hybrid': '🌟 Híbrida (Recomendado)',
+                        'similar': '💖 Basado en Favoritos',
+                        'context': '⏰ Contextual (hora/día)',
+                        'skip_resistant': '🎯 Anti-Skip'
+                    }[x],
+                    horizontal=True
+                )
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    n_recommendations = st.slider("Número de recomendaciones", 5, 50, 20)
+                
+                with col2:
+                    if strategy == 'context':
+                        from datetime import datetime
+                        use_current_time = st.checkbox("Usar hora actual", value=True)
+                        
+                        if use_current_time:
+                            current_hour = datetime.now().hour
+                            current_day = datetime.now().weekday()
+                            st.info(f"⏰ Usando: {current_hour}:00h, Día: {current_day}")
+                        else:
+                            current_hour = st.slider("Hora del día", 0, 23, 12)
+                            current_day = st.slider("Día de semana (0=Lun)", 0, 6, 0)
+                    else:
+                        current_hour = None
+                        current_day = None
+                
+                # Generar recomendaciones
+                if st.button("🎵 Generar Recomendaciones", type="primary"):
+                    with st.spinner("🔮 Generando recomendaciones..."):
+                        try:
+                            recommendations = recommender.get_recommendations(
+                                strategy=strategy,
+                                n=n_recommendations,
+                                hour=current_hour,
+                                day_of_week=current_day
+                            )
+                            
+                            st.success(f"✨ {len(recommendations)} recomendaciones generadas!")
+                            
+                            # Mostrar recomendaciones
+                            st.subheader("🎵 Tracks Recomendados")
+                            
+                            # Preparar columnas para display
+                            display_cols = []
+                            if 'track_name' in recommendations.columns:
+                                display_cols.append('track_name')
+                            if 'artist' in recommendations.columns:
+                                display_cols.append('artist')
+                            
+                            # Añadir scores disponibles
+                            score_cols = [col for col in recommendations.columns if 'score' in col.lower()]
+                            if score_cols:
+                                display_cols.append(score_cols[0])
+                            
+                            if 'popularity' in recommendations.columns:
+                                display_cols.append('popularity')
+                            if 'completion_rate' in recommendations.columns:
+                                display_cols.append('completion_rate')
+                            elif 'skip_rate' in recommendations.columns:
+                                recommendations['completion_rate'] = 1 - recommendations['skip_rate']
+                                display_cols.append('completion_rate')
+                            
+                            # Mostrar tabla
+                            display_df = recommendations[display_cols].head(n_recommendations).copy()
+                            
+                            # Formatear columnas numéricas
+                            for col in display_df.columns:
+                                if 'rate' in col or 'score' in col:
+                                    if display_df[col].max() <= 1.0:
+                                        display_df[col] = display_df[col].apply(lambda x: f"{x:.1%}" if pd.notna(x) else "N/A")
+                                    else:
+                                        display_df[col] = display_df[col].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "N/A")
+                                elif col == 'popularity':
+                                    display_df[col] = display_df[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "N/A")
+                            
+                            st.dataframe(display_df, width='stretch', hide_index=True)
+                            
+                            # Métricas de las recomendaciones
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                if 'artist' in recommendations.columns:
+                                    unique_artists = recommendations['artist'].nunique()
+                                    st.metric("Artistas Únicos", unique_artists)
+                            
+                            with col2:
+                                if 'popularity' in recommendations.columns:
+                                    avg_pop = recommendations['popularity'].mean()
+                                    st.metric("Popularidad Promedio", f"{avg_pop:.1f}")
+                            
+                            with col3:
+                                if 'completion_rate' in recommendations.columns and recommendations['completion_rate'].dtype in ['float64', 'float32']:
+                                    avg_completion = recommendations['completion_rate'].mean()
+                                    st.metric("Completion Rate", f"{avg_completion:.1%}")
+                            
+                            # Visualización de distribución
+                            st.subheader("📊 Análisis de Recomendaciones")
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                if 'artist' in recommendations.columns:
+                                    top_artists_rec = recommendations['artist'].value_counts().head(10)
+                                    fig_artists = px.bar(
+                                        x=top_artists_rec.values,
+                                        y=top_artists_rec.index,
+                                        orientation='h',
+                                        title='Top Artistas en Recomendaciones',
+                                        labels={'x': 'Tracks', 'y': 'Artista'}
+                                    )
+                                    fig_artists.update_traces(marker_color='#1DB954')
+                                    fig_artists.update_layout(yaxis={'categoryorder': 'total ascending'})
+                                    st.plotly_chart(fig_artists, width='stretch')
+                            
+                            with col2:
+                                if 'typical_hour' in recommendations.columns:
+                                    fig_hours = px.histogram(
+                                        recommendations,
+                                        x='typical_hour',
+                                        nbins=24,
+                                        title='Distribución por Hora Típica',
+                                        labels={'typical_hour': 'Hora del día'}
+                                    )
+                                    fig_hours.update_traces(marker_color='#1DB954')
+                                    st.plotly_chart(fig_hours, width='stretch')
+                            
+                            # Opción de descarga
+                            csv_recs = recommendations[display_cols].to_csv(index=False)
+                            st.download_button(
+                                label="📥 Descargar Recomendaciones (CSV)",
+                                data=csv_recs,
+                                file_name=f"recomendaciones_{strategy}.csv",
+                                mime="text/csv"
+                            )
+                            
+                        except Exception as e:
+                            st.error(f"❌ Error al generar recomendaciones: {str(e)}")
+                            st.exception(e)
+            
+            except Exception as e:
+                st.error(f"❌ Error al inicializar recomendador: {str(e)}")
+                st.info("Intenta con un rango de fechas más amplio o verifica que tengas suficientes datos.")
+    
+    with tab7:
+        st.subheader("🎧 Smart Playlists Automáticas")
+        
+        st.markdown("""
+        El generador de playlists crea automáticamente colecciones temáticas basadas en:
+        - ⏰ **Patrones temporales** (Morning Energy, Evening Chill, etc.)
+        - 🎯 **Comportamiento de escucha** (Never Skip Hits, Deep Focus, etc.)
+        - 😊 **Mood inferido** (High Energy, Relaxation, etc.)
+        - 🧩 **Clustering** (agrupación inteligente de tracks similares)
+        """)
+        
+        st.markdown("---")
+        
+        # Inicializar generador (con caché)
+        @st.cache_resource
+        def get_playlist_generator(df):
+            return create_playlist_generator(df, generate_all=False)
+        
+        with st.spinner("🎵 Inicializando generador de playlists..."):
+            try:
+                generator = get_playlist_generator(df_filtered)
+                
+                # Opciones de generación
+                st.subheader("🎨 Selecciona Tipos de Playlists a Generar")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    gen_temporal = st.checkbox("⏰ Temporales", value=True)
+                    gen_behavior = st.checkbox("🎯 Por Comportamiento", value=True)
+                
+                with col2:
+                    gen_mood = st.checkbox("😊 Por Mood", value=True)
+                    gen_artists = st.checkbox("🎤 Por Artista", value=True)
+                
+                with col3:
+                    gen_clusters = st.checkbox("🧩 Clustering", value=False)
+                    n_clusters = st.slider("N° Clusters", 3, 8, 5) if gen_clusters else 5
+                
+                # Botón de generación
+                if st.button("🎵 Generar Playlists", type="primary"):
+                    with st.spinner("🔮 Generando playlists inteligentes..."):
+                        try:
+                            generator.playlists = {}  # Reset
+                            
+                            if gen_temporal:
+                                generator.generate_temporal_playlists()
+                            if gen_behavior:
+                                generator.generate_behavior_playlists()
+                            if gen_mood:
+                                generator.generate_mood_playlists()
+                            if gen_artists:
+                                generator.generate_artist_playlists(top_n_artists=5)
+                            if gen_clusters:
+                                generator.generate_cluster_playlists(n_clusters=n_clusters)
+                            
+                            generator.generate_discovery_playlist()
+                            
+                            st.success(f"✨ {len(generator.playlists)} playlists generadas!")
+                            
+                        except Exception as e:
+                            st.error(f"❌ Error al generar playlists: {str(e)}")
+                
+                # Mostrar playlists generadas
+                if len(generator.playlists) > 0:
+                    st.markdown("---")
+                    st.subheader(f"📀 Playlists Disponibles ({len(generator.playlists)})")
+                    
+                    # Selector de playlist
+                    playlist_names = sorted(generator.playlists.keys())
+                    selected_playlist = st.selectbox(
+                        "Selecciona una playlist para ver detalles:",
+                        playlist_names
+                    )
+                    
+                    if selected_playlist:
+                        playlist = generator.get_playlist(selected_playlist)
+                        
+                        # Header de la playlist
+                        st.markdown(f"### 🎵 {selected_playlist}")
+                        
+                        # Métricas
+                        diversity_metrics = analyze_playlist_diversity(playlist)
+                        
+                        col1, col2, col3, col4 = st.columns(4)
+                        
+                        with col1:
+                            st.metric("Total Tracks", diversity_metrics.get('n_tracks', 0))
+                        
+                        with col2:
+                            if 'n_artists' in diversity_metrics:
+                                st.metric("Artistas", diversity_metrics['n_artists'])
+                        
+                        with col3:
+                            if 'artist_diversity' in diversity_metrics:
+                                st.metric("Diversidad", f"{diversity_metrics['artist_diversity']:.1%}")
+                        
+                        with col4:
+                            if 'avg_skip_rate' in diversity_metrics:
+                                st.metric("Avg Skip Rate", f"{diversity_metrics['avg_skip_rate']:.1%}")
+                        
+                        # Tracks de la playlist
+                        st.subheader("📋 Tracks")
+                        
+                        display_cols = []
+                        if 'track_name' in playlist.columns:
+                            display_cols.append('track_name')
+                        if 'artist' in playlist.columns:
+                            display_cols.append('artist')
+                        if 'play_count' in playlist.columns:
+                            display_cols.append('play_count')
+                        if 'typical_hour' in playlist.columns:
+                            display_cols.append('typical_hour')
+                        if 'skip_rate' in playlist.columns:
+                            display_cols.append('skip_rate')
+                        
+                        if display_cols:
+                            display_df = playlist[display_cols].head(30).copy()
+                            
+                            # Formatear
+                            if 'skip_rate' in display_df.columns:
+                                display_df['skip_rate'] = display_df['skip_rate'].apply(
+                                    lambda x: f"{x:.1%}" if pd.notna(x) else "N/A"
+                                )
+                            if 'typical_hour' in display_df.columns:
+                                display_df['typical_hour'] = display_df['typical_hour'].apply(
+                                    lambda x: f"{x:.0f}h" if pd.notna(x) else "N/A"
+                                )
+                            
+                            st.dataframe(display_df, width='stretch', hide_index=True)
+                        
+                        # Visualizaciones
+                        st.subheader("📊 Análisis de la Playlist")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if 'artist' in playlist.columns:
+                                top_artists = playlist['artist'].value_counts().head(10)
+                                fig = px.bar(
+                                    x=top_artists.values,
+                                    y=top_artists.index,
+                                    orientation='h',
+                                    title='Top Artistas',
+                                    labels={'x': 'Tracks', 'y': 'Artista'}
+                                )
+                                fig.update_traces(marker_color='#1DB954')
+                                fig.update_layout(yaxis={'categoryorder': 'total ascending'})
+                                st.plotly_chart(fig, width='stretch')
+                        
+                        with col2:
+                            if 'typical_hour' in playlist.columns:
+                                fig = px.histogram(
+                                    playlist,
+                                    x='typical_hour',
+                                    nbins=24,
+                                    title='Distribución Temporal',
+                                    labels={'typical_hour': 'Hora del día'}
+                                )
+                                fig.update_traces(marker_color='#1DB954')
+                                st.plotly_chart(fig, width='stretch')
+                        
+                        # Exportar playlist
+                        st.markdown("---")
+                        
+                        col1, col2 = st.columns([3, 1])
+                        
+                        with col2:
+                            if st.button("📥 Exportar Playlist", key=f"export_{selected_playlist}"):
+                                csv_playlist = playlist[display_cols].to_csv(index=False)
+                                st.download_button(
+                                    label="💾 Descargar CSV",
+                                    data=csv_playlist,
+                                    file_name=f"{selected_playlist.replace(' ', '_').lower()}.csv",
+                                    mime="text/csv",
+                                    key=f"download_{selected_playlist}"
+                                )
+                else:
+                    st.info("👆 Genera playlists usando los controles de arriba")
+            
+            except Exception as e:
+                st.error(f"❌ Error al inicializar generador: {str(e)}")
+                st.info("Intenta con un rango de fechas más amplio o verifica que tengas suficientes datos.")
+    
+    with tab8:
         st.subheader("📥 Exportar Datos y Estadísticas")
         
         st.write("### 📊 Resumen Completo")
